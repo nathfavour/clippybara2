@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'utils/platform_utils.dart';
+import 'widgets/qr_scanner_page.dart';
+import 'widgets/qr_display_widget.dart';
 
 void main() {
   runApp(const MyApp());
@@ -56,11 +59,15 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
   final TextEditingController _serverUrlController = TextEditingController();
   String _status = "Disconnected";
   String _clipboardContent = "";
+  bool _showQrCode = false;
 
   @override
   void initState() {
     super.initState();
     _pollClipboard();
+
+    // Set a default server URL for demonstration
+    _serverUrlController.text = "http://192.168.1.100:8000";
   }
 
   void _pollClipboard() async {
@@ -76,11 +83,27 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
     }
   }
 
-  void _scanQRCode() async {
-    setState(() {
-      _serverUrlController.text = "http://192.168.1.100:8000";
-      _status = "Connected";
-    });
+  Future<void> _handleQrCodeAction() async {
+    if (PlatformUtils.isMobile) {
+      // On mobile: Navigate to QR scanner and get result
+      final scannedUrl = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(builder: (context) => const QRScannerPage()),
+      );
+
+      if (scannedUrl != null && mounted) {
+        setState(() {
+          _serverUrlController.text = scannedUrl;
+          _status = "Connected";
+        });
+        // In production: This is where you'd connect to the server with the scanned URL
+      }
+    } else {
+      // On desktop: Show/hide QR code
+      setState(() {
+        _showQrCode = !_showQrCode;
+      });
+    }
   }
 
   void _connectManually() {
@@ -89,6 +112,7 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
       setState(() {
         _status = "Connected";
       });
+      // In production: This is where you'd connect to the server with the typed URL
     }
   }
 
@@ -102,43 +126,72 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Clipboard Sync")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _serverUrlController,
-              decoration: const InputDecoration(
-                labelText: "Server URL",
-                hintText: "Enter server URL or scan QR code",
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              TextField(
+                controller: _serverUrlController,
+                decoration: const InputDecoration(
+                  labelText: "Server URL",
+                  hintText: "Enter server URL or scan QR code",
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                ElevatedButton(
-                  onPressed: _connectManually,
-                  child: const Text("Connect"),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _connectManually,
+                      child: const Text("Connect"),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _handleQrCodeAction,
+                      child: Text(
+                        PlatformUtils.isMobile
+                            ? "Scan QR Code"
+                            : _showQrCode
+                                ? "Hide QR Code"
+                                : "Show QR Code",
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text("Status: $_status"),
+
+              // QR code section for desktop
+              if (_showQrCode && PlatformUtils.isDesktop)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20.0),
+                  child: QrDisplayWidget(
+                    data: _serverUrlController.text.isEmpty
+                        ? "http://192.168.1.100:8000"
+                        : _serverUrlController.text,
+                  ),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: _scanQRCode,
-                  child: const Text("Scan QR Code"),
+
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 20),
+              const Text("Local Clipboard:"),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8.0),
+                color: Colors.grey[200],
+                child: Text(
+                  _clipboardContent.isEmpty
+                      ? "No clipboard content"
+                      : _clipboardContent,
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text("Status: $_status"),
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 20),
-            const Text("Local Clipboard:"),
-            Container(
-              padding: const EdgeInsets.all(8.0),
-              color: Colors.grey[200],
-              child: Text(_clipboardContent),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
