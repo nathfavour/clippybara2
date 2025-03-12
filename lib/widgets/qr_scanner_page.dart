@@ -9,16 +9,18 @@ class QRScannerPage extends StatefulWidget {
 }
 
 class _QRScannerPageState extends State<QRScannerPage> {
+  // Create the controller without ValueNotifiers that don't exist in v6.0.7
   final MobileScannerController controller = MobileScannerController();
   bool _scanComplete = false;
   bool _hasError = false;
   String _scanStatus = 'Scanning...';
   String _errorMessage = '';
+  bool _isUsingFrontCamera = false;
+  bool _isTorchOn = false;
 
   @override
   void initState() {
     super.initState();
-    // Make sure the camera is initialized properly
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateScanStatus('Position the QR code within the frame');
     });
@@ -39,7 +41,6 @@ class _QRScannerPageState extends State<QRScannerPage> {
         _errorMessage = message;
       });
 
-      // Show error for 2 seconds then reset scanner
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
           setState(() {
@@ -51,35 +52,43 @@ class _QRScannerPageState extends State<QRScannerPage> {
     }
   }
 
+  void _toggleTorch() async {
+    try {
+      await controller.toggleTorch();
+      setState(() {
+        _isTorchOn = !_isTorchOn;
+      });
+    } catch (e) {
+      _showError('Failed to toggle torch: $e');
+    }
+  }
+
+  void _switchCamera() async {
+    try {
+      await controller.switchCamera();
+      setState(() {
+        _isUsingFrontCamera = !_isUsingFrontCamera;
+      });
+    } catch (e) {
+      _showError('Failed to switch camera: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan QR Code'),
         actions: [
+          // Replace ValueListenableBuilder with direct state
           IconButton(
-            icon: ValueListenableBuilder(
-              valueListenable: controller.torchState,
-              builder: (context, state, child) {
-                return Icon(
-                  state == TorchState.on ? Icons.flash_on : Icons.flash_off,
-                );
-              },
-            ),
-            onPressed: () => controller.toggleTorch(),
+            icon: Icon(_isTorchOn ? Icons.flash_on : Icons.flash_off),
+            onPressed: _toggleTorch,
           ),
           IconButton(
-            icon: ValueListenableBuilder(
-              valueListenable: controller.cameraFacingState,
-              builder: (context, state, child) {
-                return Icon(
-                  state == CameraFacing.front
-                      ? Icons.camera_front
-                      : Icons.camera_rear,
-                );
-              },
-            ),
-            onPressed: () => controller.switchCamera(),
+            icon: Icon(
+                _isUsingFrontCamera ? Icons.camera_front : Icons.camera_rear),
+            onPressed: _switchCamera,
           ),
         ],
       ),
