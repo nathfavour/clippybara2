@@ -9,18 +9,46 @@ class QRScannerPage extends StatefulWidget {
 }
 
 class _QRScannerPageState extends State<QRScannerPage> {
-  final MobileScannerController controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.back,
-    torchEnabled: false,
-  );
-
+  final MobileScannerController controller = MobileScannerController();
   bool _scanComplete = false;
+  bool _hasError = false;
   String _scanStatus = 'Scanning...';
+  String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
+    // Make sure the camera is initialized properly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateScanStatus('Position the QR code within the frame');
+    });
+  }
+
+  void _updateScanStatus(String message) {
+    if (mounted) {
+      setState(() {
+        _scanStatus = message;
+      });
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      setState(() {
+        _hasError = true;
+        _errorMessage = message;
+      });
+
+      // Show error for 2 seconds then reset scanner
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _hasError = false;
+            _errorMessage = '';
+          });
+        }
+      });
+    }
   }
 
   @override
@@ -57,53 +85,62 @@ class _QRScannerPageState extends State<QRScannerPage> {
       ),
       body: Stack(
         children: [
+          // Scanner view
           MobileScanner(
             controller: controller,
-            onDetect: (capture) {
-              if (_scanComplete) return;
-
-              final List<Barcode> barcodes = capture.barcodes;
-              final qrCodes = barcodes
-                  .where((code) =>
-                      code.format == BarcodeFormat.qrCode &&
-                      code.rawValue != null &&
-                      code.rawValue!.isNotEmpty)
-                  .toList();
-
-              if (qrCodes.isNotEmpty) {
-                _processScanResult(qrCodes[0].rawValue!);
-              }
+            onDetect: _onDetect,
+            errorBuilder: (context, error, child) {
+              return Center(
+                child: Text(
+                  'Scanner error: ${error.errorCode}',
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                ),
+              );
             },
           ),
+
+          // Overlay with scan frame
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withOpacity(0.3),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Stack(
                 children: [
-                  Container(
-                    width: 250,
-                    height: 250,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white, width: 2.0),
-                      borderRadius: BorderRadius.circular(12),
+                  // Centered transparent scanner box
+                  Center(
+                    child: Container(
+                      width: 250,
+                      height: 250,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.white, width: 2.0),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.transparent,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _scanStatus,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+
+                  // Status message
+                  Positioned(
+                    bottom: 100,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _hasError ? Colors.red : Colors.black54,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _hasError ? _errorMessage : _scanStatus,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -116,14 +153,46 @@ class _QRScannerPageState extends State<QRScannerPage> {
     );
   }
 
+  void _onDetect(BarcodeCapture capture) {
+    if (_scanComplete) return;
+
+    // Debug: print all barcodes found
+    print('Detected ${capture.barcodes.length} barcodes');
+    for (final barcode in capture.barcodes) {
+      print('Barcode: ${barcode.rawValue}, format: ${barcode.format}');
+    }
+
+    // Filter QR codes with valid URLs
+    final validBarcodes = capture.barcodes.where((barcode) {
+      final rawValue = barcode.rawValue ?? '';
+      return rawValue.isNotEmpty &&
+          (rawValue.startsWith('http://') || rawValue.startsWith('https://'));
+    }).toList();
+
+    if (validBarcodes.isNotEmpty) {
+      _processScanResult(validBarcodes.first.rawValue!);
+    } else if (capture.barcodes.isNotEmpty &&
+        capture.barcodes.first.rawValue != null) {
+      // Found a barcode, but not a valid URL
+      _showError('Invalid QR code: Not a valid URL');
+    }
+  }
+
   void _processScanResult(String code) {
     if (_scanComplete) return;
 
+    // Validate that it's a reasonable URL before returning
+    if (!code.startsWith('http://') && !code.startsWith('https://')) {
+      _showError('Invalid URL format');
+      return;
+    }
+
     setState(() {
       _scanComplete = true;
-      _scanStatus = 'QR Code found! Redirecting...';
+      _scanStatus = 'URL found! Connecting...';
     });
 
+    // Visual feedback that the QR code was successfully scanned
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         Navigator.pop(context, code);

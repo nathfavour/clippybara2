@@ -85,28 +85,49 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
 
   Future<void> _handleQrCodeAction() async {
     if (PlatformUtils.isMobile) {
-      // On mobile: Navigate to QR scanner and get result
-      final scannedUrl = await Navigator.push<String>(
-        context,
-        MaterialPageRoute(builder: (context) => const QRScannerPage()),
+      // Show loading indicator while preparing camera
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
       );
 
-      if (scannedUrl != null && mounted) {
-        setState(() {
-          _serverUrlController.text = scannedUrl;
-          _status = "Connected";
-        });
+      // Wait a moment to ensure the dialog is shown before navigating
+      await Future.delayed(const Duration(milliseconds: 300));
 
-        // Show a snackbar to provide feedback about the successful scan
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('QR code scanned: $scannedUrl'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
+      // Pop the loading dialog
+      if (context.mounted) {
+        Navigator.pop(context);
+
+        // Navigate to QR scanner and get result
+        final scannedUrl = await Navigator.push<String>(
+          context,
+          MaterialPageRoute(builder: (context) => const QRScannerPage()),
         );
 
-        // In production: This is where you'd connect to the server with the scanned URL
+        if (scannedUrl != null && context.mounted) {
+          // Update the URL input
+          setState(() {
+            _serverUrlController.text = scannedUrl;
+            _status = "Connected";
+          });
+
+          // Show success message with the scanned URL
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully scanned: $scannedUrl'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // In a real app, you would connect to the server here
+          // _connectToServer(scannedUrl);
+        }
       }
     } else {
       // On desktop: Show/hide QR code
@@ -114,6 +135,25 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
         _showQrCode = !_showQrCode;
       });
     }
+  }
+
+  // Optional: Add a method to connect to server after scanning
+  Future<void> _connectToServer(String url) async {
+    // Show connecting indicator
+    setState(() {
+      _status = "Connecting...";
+    });
+
+    // Simulate connection delay
+    await Future.delayed(const Duration(seconds: 1));
+
+    // Update connection status (in real app, check actual connection)
+    setState(() {
+      _status = "Connected";
+    });
+
+    // Start clipboard sync in background
+    // ...
   }
 
   void _connectManually() {
