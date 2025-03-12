@@ -13,8 +13,10 @@ dependencies:
   http: ^0.13.5
   shared_preferences: ^2.0.15
   qr_flutter: ^4.1.0
-  mobile_scanner: ^3.2.0
+  # Update mobile_scanner to latest version for better QR code detection
+  # mobile_scanner: ^3.4.1
   image_picker: ^0.8.7
+  mobile_scanner: ^6.0.7
 
 dev_dependencies:
   flutter_test:

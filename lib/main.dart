@@ -96,6 +96,16 @@ class _ClipboardSyncPageState extends State<ClipboardSyncPage> {
           _serverUrlController.text = scannedUrl;
           _status = "Connected";
         });
+
+        // Show a snackbar to provide feedback about the successful scan
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('QR code scanned: $scannedUrl'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
         // In production: This is where you'd connect to the server with the scanned URL
       }
     } else {
